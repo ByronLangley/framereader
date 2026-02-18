@@ -28,8 +28,8 @@ export async function transcribeAudio(
   const transcript = await assemblyai.transcripts.transcribe({
     audio: audioPath,
     speaker_labels: true,
-    speech_model: "best",
-  });
+    speech_models: ["universal-2"],
+  } as Parameters<typeof assemblyai.transcripts.transcribe>[0]);
 
   if (transcript.status === "error") {
     throw new Error(`AssemblyAI transcription error: ${transcript.error}`);
