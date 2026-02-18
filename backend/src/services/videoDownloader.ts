@@ -12,6 +12,24 @@ interface DownloadResult {
   duration: number; // seconds
 }
 
+// yt-dlp args that help bypass YouTube bot detection on datacenter IPs
+const YT_BYPASS_ARGS = [
+  "--extractor-args", "youtube:player_client=web_creator",
+  "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  "--geo-bypass",
+];
+
+// Cookies file path (optional, set via YTDLP_COOKIES_FILE env or place at /app/backend/cookies.txt)
+const COOKIES_FILE = process.env.YTDLP_COOKIES_FILE || path.join(__dirname, "../../cookies.txt");
+
+function getCookieArgs(): string[] {
+  if (fs.existsSync(COOKIES_FILE)) {
+    logger.info(`Using cookies file: ${COOKIES_FILE}`);
+    return ["--cookies", COOKIES_FILE];
+  }
+  return [];
+}
+
 export async function downloadVideo(
   jobId: string,
   videoUrl: string
@@ -23,13 +41,14 @@ export async function downloadVideo(
 
   const outputTemplate = path.join(tmpDir, `${jobId}_video.%(ext)s`);
   const ytDlp = new YTDlpWrap();
+  const cookieArgs = getCookieArgs();
 
   logger.info(`Downloading video for job ${jobId}: ${videoUrl}`);
 
   // First, get metadata
   let metadata: { title: string; duration: number };
   try {
-    const info = await ytDlp.getVideoInfo(videoUrl);
+    const info = await ytDlp.getVideoInfo([videoUrl, ...YT_BYPASS_ARGS, ...cookieArgs]);
     metadata = {
       title: info.title || "Untitled",
       duration: info.duration || 0,
@@ -40,68 +59,103 @@ export async function downloadVideo(
     metadata = { title: "Untitled", duration: 0 };
   }
 
-  // Download video
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error("Download timed out"));
-      }, DOWNLOAD_TIMEOUT_MS);
-
-      const process = ytDlp.exec([
+  // Try download with different strategies
+  const strategies = [
+    {
+      name: "web_creator client",
+      args: [
+        videoUrl,
+        "-f", "bestvideo[height<=720]+bestaudio/best[height<=720]",
+        "--merge-output-format", "mp4",
+        "-o", outputTemplate,
+        "--no-playlist",
+        ...YT_BYPASS_ARGS,
+        ...cookieArgs,
+      ],
+    },
+    {
+      name: "mediaconnect client",
+      args: [
+        videoUrl,
+        "-f", "bestvideo[height<=720]+bestaudio/best[height<=720]",
+        "--merge-output-format", "mp4",
+        "-o", outputTemplate,
+        "--no-playlist",
+        "--extractor-args", "youtube:player_client=mediaconnect",
+        "--geo-bypass",
+        ...cookieArgs,
+      ],
+    },
+    {
+      name: "default client with retries",
+      args: [
         videoUrl,
         "-f", "bestvideo[height<=720]+bestaudio/best[height<=720]",
         "--merge-output-format", "mp4",
         "-o", outputTemplate,
         "--no-playlist",
         "--no-warnings",
-      ]);
+        "--geo-bypass",
+        "--sleep-requests", "1",
+        ...cookieArgs,
+      ],
+    },
+  ];
 
-      let errorOutput = "";
+  let lastError = "";
 
-      process.on("error", (err: Error) => {
-        clearTimeout(timeout);
-        reject(err);
+  for (const strategy of strategies) {
+    logger.info(`Trying download strategy: ${strategy.name}`);
+
+    // Clean up any partial files from previous attempt
+    cleanupPartialFiles(tmpDir, jobId);
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error("Download timed out"));
+        }, DOWNLOAD_TIMEOUT_MS);
+
+        const process = ytDlp.exec(strategy.args);
+
+        let errorOutput = "";
+
+        process.on("error", (err: Error) => {
+          clearTimeout(timeout);
+          reject(err);
+        });
+
+        process.on("ytDlpEvent", (type: string, data: string) => {
+          if (type === "error") {
+            errorOutput += data;
+          }
+        });
+
+        process.on("close", (code: number | null) => {
+          clearTimeout(timeout);
+          if (code === 0) {
+            resolve();
+          } else {
+            reject(new Error(`yt-dlp exited with code ${code}: ${errorOutput}`));
+          }
+        });
       });
 
-      process.on("ytDlpEvent", (type: string, data: string) => {
-        if (type === "error") {
-          errorOutput += data;
-        }
-      });
+      // If we get here, download succeeded
+      logger.info(`Download succeeded with strategy: ${strategy.name}`);
+      break;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      lastError = message;
+      logger.warn(`Download strategy "${strategy.name}" failed: ${message}`);
 
-      process.on("close", (code: number | null) => {
-        clearTimeout(timeout);
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`yt-dlp exited with code ${code}: ${errorOutput}`));
-        }
-      });
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+      if (message.includes("timed out")) {
+        // Don't retry on timeout
+        break;
+      }
 
-    if (message.includes("timed out")) {
-      throw new ProcessingError(
-        "download",
-        "Download timed out. Try again or upload the file directly.",
-        message
-      );
+      // Continue to next strategy
     }
-
-    if (message.includes("Private") || message.includes("restricted")) {
-      throw new ProcessingError(
-        "download",
-        "This video appears to be private or restricted. Try uploading the file directly.",
-        message
-      );
-    }
-
-    throw new ProcessingError(
-      "download",
-      "We couldn't access this video. This sometimes happens. Try uploading the file instead.",
-      message
-    );
   }
 
   // Find the downloaded file
@@ -111,19 +165,57 @@ export async function downloadVideo(
   );
 
   if (!videoFile) {
+    if (lastError.includes("timed out")) {
+      throw new ProcessingError(
+        "download",
+        "Download timed out. Try again or upload the file directly.",
+        lastError
+      );
+    }
+
+    if (lastError.includes("Private") || lastError.includes("restricted")) {
+      throw new ProcessingError(
+        "download",
+        "This video appears to be private or restricted. Try uploading the file directly.",
+        lastError
+      );
+    }
+
+    if (lastError.includes("bot") || lastError.includes("Sign in")) {
+      throw new ProcessingError(
+        "download",
+        "YouTube is blocking this download from our server. Please upload the video file directly instead.",
+        lastError
+      );
+    }
+
     throw new ProcessingError(
       "download",
-      "Download appeared to succeed but no file was found. Try again.",
-      "No video file found after download"
+      "We couldn't download this video. Try uploading the file directly instead.",
+      lastError
     );
   }
 
   const filePath = path.join(tmpDir, videoFile);
-  logger.info(`Video downloaded: ${filePath}`);
+  const stats = fs.statSync(filePath);
+  logger.info(`Video downloaded: ${filePath} (${(stats.size / 1024 / 1024).toFixed(1)} MB)`);
 
   return {
     filePath,
     title: metadata.title,
     duration: metadata.duration,
   };
+}
+
+function cleanupPartialFiles(tmpDir: string, jobId: string): void {
+  try {
+    const files = fs.readdirSync(tmpDir);
+    for (const f of files) {
+      if (f.startsWith(`${jobId}_video`)) {
+        fs.unlinkSync(path.join(tmpDir, f));
+      }
+    }
+  } catch {
+    // Non-critical
+  }
 }
