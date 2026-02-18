@@ -16,9 +16,10 @@ COPY shared/src ./shared/src
 
 # Copy backend package
 COPY backend/package.json backend/tsconfig.json ./backend/
+COPY backend/src ./backend/src
 
 # Copy root workspace files
-COPY package.json tsconfig.base.json ./
+COPY package.json package-lock.json tsconfig.base.json ./
 
 # Install dependencies
 RUN npm install --workspace=shared --workspace=backend
