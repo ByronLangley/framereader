@@ -1,5 +1,5 @@
 [build]
-  command = "npm run build"
+  command = "cd .. && npm install --workspace=shared --workspace=frontend && npm run build --workspace=shared && cd frontend && npm run build"
   publish = ".next"
 
 [build.environment]
