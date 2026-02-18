@@ -12,7 +12,7 @@ import {
   saveScript,
   getStoredScript,
 } from "@/lib/storage";
-import { getJobStatus, getScript } from "@/lib/api";
+import { getJobStatus, getScript, ApiError } from "@/lib/api";
 import {
   POLLING_INTERVAL_MS,
   POLLING_SLOW_MS,
@@ -149,8 +149,21 @@ export function useQueue() {
             }
           }
         }
-      } catch {
-        // Will retry on next poll
+      } catch (err) {
+        // If job not found (404), mark as error and stop polling
+        if (err instanceof ApiError && err.status === 404) {
+          stopPolling(jobId);
+          setItems((prev) => {
+            const updated = prev.map((q) =>
+              q.jobId === jobId
+                ? { ...q, status: "error" as JobStatus }
+                : q
+            );
+            setQueue(updated);
+            return updated;
+          });
+        }
+        // Other errors: will retry on next poll
       }
     },
     []
