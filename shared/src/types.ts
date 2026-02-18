@@ -38,6 +38,7 @@ export interface Job {
     message: string;
     userMessage: string;
   } | null;
+  stageErrors: Record<string, string>;
   createdAt: number;
   completedAt: number | null;
 }

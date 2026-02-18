@@ -28,6 +28,7 @@ export function createJob(
     visualAnalysis: null,
     script: null,
     error: null,
+    stageErrors: {},
     createdAt: Date.now(),
     completedAt: null,
   };
@@ -93,6 +94,16 @@ export function setJobScript(jobId: string, script: string): void {
   const job = jobs.get(jobId);
   if (!job) return;
   job.script = script;
+}
+
+export function setJobStageError(
+  jobId: string,
+  stage: string,
+  errorMessage: string
+): void {
+  const job = jobs.get(jobId);
+  if (!job) return;
+  job.stageErrors[stage] = errorMessage;
 }
 
 export function setJobError(

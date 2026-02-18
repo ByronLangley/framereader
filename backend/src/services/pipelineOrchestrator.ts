@@ -8,6 +8,7 @@ import {
   setJobVisualAnalysis,
   setJobScript,
   setJobError,
+  setJobStageError,
 } from "./jobStore";
 import { onJobComplete } from "./queueManager";
 import { downloadVideo } from "./videoDownloader";
@@ -111,9 +112,11 @@ export async function processJob(jobId: string): Promise<void> {
             cleanupAudio(jobId);
           })
           .catch((err) => {
-            logger.error(`Transcription FAILED for job ${jobId}`, { error: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined });
+            const errMsg = err instanceof Error ? err.message : String(err);
+            logger.error(`Transcription FAILED for job ${jobId}`, { error: errMsg, stack: err instanceof Error ? err.stack : undefined });
             transcriptionFailed = true;
             updateJobStage(jobId, "transcription", "error");
+            setJobStageError(jobId, "transcription", errMsg);
             cleanupAudio(jobId);
           })
       : Promise.resolve().then(() => {
@@ -131,9 +134,11 @@ export async function processJob(jobId: string): Promise<void> {
             cleanupFrames(jobId);
           })
           .catch((err) => {
-            logger.error(`Visual analysis failed for job ${jobId}`, { error: err });
+            const errMsg = err instanceof Error ? err.message : String(err);
+            logger.error(`Visual analysis failed for job ${jobId}`, { error: errMsg });
             visualFailed = true;
             updateJobStage(jobId, "visual", "error");
+            setJobStageError(jobId, "visual", errMsg);
             cleanupFrames(jobId);
           })
       : Promise.resolve().then(() => {

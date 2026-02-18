@@ -44,6 +44,7 @@ statusRouter.get(
               userMessage: job.error.userMessage,
             }
           : null,
+        stageErrors: Object.keys(job.stageErrors).length > 0 ? job.stageErrors : undefined,
         estimatedTimeRemaining,
       });
     } catch (err) {
