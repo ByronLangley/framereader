@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { execSync } from "child_process";
 import { getActiveJobCount, getQueuedJobCount } from "../services/jobStore";
+import { config } from "../config";
 
 const startTime = Date.now();
 
@@ -32,5 +33,10 @@ healthRouter.get("/diag", (_req, res) => {
     tmpDir: check("ls -la /app/backend/tmp/ 2>&1 | head -10"),
     nodeVersion: process.version,
     platform: process.platform,
+    apiKeys: {
+      anthropic: config.anthropicApiKey ? `set (${config.anthropicApiKey.length} chars)` : "MISSING",
+      assemblyai: config.assemblyaiApiKey ? `set (${config.assemblyaiApiKey.length} chars)` : "MISSING",
+      youtubeCookies: config.youtubeCookiesPath ? "set" : "not configured",
+    },
   });
 });
