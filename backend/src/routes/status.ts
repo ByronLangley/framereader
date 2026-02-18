@@ -37,6 +37,13 @@ statusRouter.get(
               platform: job.platform,
             }
           : null,
+        error: job.error
+          ? {
+              stage: job.error.stage,
+              message: job.error.message,
+              userMessage: job.error.userMessage,
+            }
+          : null,
         estimatedTimeRemaining,
       });
     } catch (err) {
