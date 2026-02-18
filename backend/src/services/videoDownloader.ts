@@ -57,13 +57,16 @@ export async function downloadVideo(
     metadata = { title: "Untitled", duration: 0 };
   }
 
+  // Format string with generous fallbacks — some player clients don't offer separate streams
+  const FORMAT = "bestvideo[height<=720]+bestaudio/best[height<=720]/bestvideo+bestaudio/best";
+
   // Try download with different strategies
   const strategies = [
     {
       name: "web_creator client",
       args: [
         videoUrl,
-        "-f", "bestvideo[height<=720]+bestaudio/best[height<=720]",
+        "-f", FORMAT,
         "--merge-output-format", "mp4",
         "-o", outputTemplate,
         "--no-playlist",
@@ -75,7 +78,7 @@ export async function downloadVideo(
       name: "mediaconnect client",
       args: [
         videoUrl,
-        "-f", "bestvideo[height<=720]+bestaudio/best[height<=720]",
+        "-f", FORMAT,
         "--merge-output-format", "mp4",
         "-o", outputTemplate,
         "--no-playlist",
@@ -85,16 +88,14 @@ export async function downloadVideo(
       ],
     },
     {
-      name: "default client with retries",
+      name: "default client",
       args: [
         videoUrl,
-        "-f", "bestvideo[height<=720]+bestaudio/best[height<=720]",
+        "-f", FORMAT,
         "--merge-output-format", "mp4",
         "-o", outputTemplate,
         "--no-playlist",
-        "--no-warnings",
         "--geo-bypass",
-        "--sleep-requests", "1",
         ...cookieArgs,
       ],
     },
