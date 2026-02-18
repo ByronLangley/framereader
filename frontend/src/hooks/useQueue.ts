@@ -81,6 +81,17 @@ export function useQueue() {
     );
   }, []);
 
+  // Update the script content (for inline editing)
+  const updateScript = useCallback(
+    (newScript: string) => {
+      setSelectedScript(newScript);
+      if (selectedJobId) {
+        saveScript(selectedJobId, newScript);
+      }
+    },
+    [selectedJobId]
+  );
+
   // Select a job and load its script
   const selectJob = useCallback(
     async (jobId: string) => {
@@ -205,5 +216,6 @@ export function useQueue() {
     clearCompleted,
     markCopied,
     selectJob,
+    updateScript,
   };
 }
