@@ -1,0 +1,151 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-courier-prime);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+
+  /* Custom FrameReader colors */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-script-bg: #FAFAFA;
+  --color-script-text: #1A1A2E;
+  --color-script-character: #6D28D9;
+  --color-script-timestamp: #6B7280;
+  --color-script-uncertain: #F59E0B;
+}
+
+:root {
+  --radius: 0.75rem;
+  /* Light theme — FrameReader */
+  --background: #FFFFFF;
+  --foreground: #0F0F14;
+  --card: #F5F5F5;
+  --card-foreground: #0F0F14;
+  --popover: #FFFFFF;
+  --popover-foreground: #0F0F14;
+  --primary: #8B5CF6;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F1F1F4;
+  --secondary-foreground: #0F0F14;
+  --muted: #F1F1F4;
+  --muted-foreground: #6B6B80;
+  --accent: #F1F1F4;
+  --accent-foreground: #0F0F14;
+  --destructive: #EF4444;
+  --border: #E5E5EA;
+  --input: #E5E5EA;
+  --ring: #8B5CF6;
+  --success: #10B981;
+  --warning: #F59E0B;
+  --info: #3B82F6;
+  --chart-1: #8B5CF6;
+  --chart-2: #10B981;
+  --chart-3: #F59E0B;
+  --chart-4: #EF4444;
+  --chart-5: #3B82F6;
+  --sidebar: #F5F5F5;
+  --sidebar-foreground: #0F0F14;
+  --sidebar-primary: #8B5CF6;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F1F1F4;
+  --sidebar-accent-foreground: #0F0F14;
+  --sidebar-border: #E5E5EA;
+  --sidebar-ring: #8B5CF6;
+}
+
+.dark {
+  /* Dark theme — FrameReader PRD colors */
+  --background: #0F0F14;
+  --foreground: #F1F1F4;
+  --card: #1A1A24;
+  --card-foreground: #F1F1F4;
+  --popover: #1A1A24;
+  --popover-foreground: #F1F1F4;
+  --primary: #8B5CF6;
+  --primary-foreground: #FFFFFF;
+  --secondary: #24243A;
+  --secondary-foreground: #F1F1F4;
+  --muted: #24243A;
+  --muted-foreground: #6B6B80;
+  --accent: #24243A;
+  --accent-foreground: #F1F1F4;
+  --destructive: #EF4444;
+  --border: #2A2A3C;
+  --input: #2A2A3C;
+  --ring: #8B5CF6;
+  --success: #10B981;
+  --warning: #F59E0B;
+  --info: #3B82F6;
+  --chart-1: #8B5CF6;
+  --chart-2: #10B981;
+  --chart-3: #F59E0B;
+  --chart-4: #EF4444;
+  --chart-5: #3B82F6;
+  --sidebar: #1A1A24;
+  --sidebar-foreground: #F1F1F4;
+  --sidebar-primary: #8B5CF6;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #24243A;
+  --sidebar-accent-foreground: #F1F1F4;
+  --sidebar-border: #2A2A3C;
+  --sidebar-ring: #8B5CF6;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Script panel — always light regardless of theme */
+.script-panel {
+  background: var(--color-script-bg);
+  color: var(--color-script-text);
+  font-family: var(--font-mono);
+}
