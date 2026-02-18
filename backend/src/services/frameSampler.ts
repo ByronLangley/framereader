@@ -71,6 +71,17 @@ async function sampleBySceneDetection(
   const timestamps = await detectSceneChanges(videoPath);
   logger.debug(`Scene detection found ${timestamps.length} changes`);
 
+  // Always include the opening frame — scene detection only captures CHANGES,
+  // so the first scene (t=0) is never detected since there's nothing before it.
+  if (timestamps.length === 0 || timestamps[0] > 1.5) {
+    timestamps.unshift(0);
+  }
+
+  // Also include a frame near the end if the last detected scene is far from it
+  if (timestamps.length === 0 || duration - timestamps[timestamps.length - 1] > 5) {
+    timestamps.push(Math.max(0, duration - 2));
+  }
+
   // If too many, subsample
   let selectedTimestamps = timestamps;
   if (selectedTimestamps.length > MAX_FRAMES) {
