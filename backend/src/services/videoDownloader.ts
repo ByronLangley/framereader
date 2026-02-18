@@ -19,14 +19,12 @@ const YT_BYPASS_ARGS = [
   "--geo-bypass",
 ];
 
-// Cookies file path (optional, set via YTDLP_COOKIES_FILE env or place at /app/backend/cookies.txt)
-const COOKIES_FILE = process.env.YTDLP_COOKIES_FILE || path.join(__dirname, "../../cookies.txt");
-
 function getCookieArgs(): string[] {
-  if (fs.existsSync(COOKIES_FILE)) {
-    logger.info(`Using cookies file: ${COOKIES_FILE}`);
-    return ["--cookies", COOKIES_FILE];
+  if (config.youtubeCookiesPath) {
+    logger.info(`Using cookies file: ${config.youtubeCookiesPath}`);
+    return ["--cookies", config.youtubeCookiesPath];
   }
+  logger.warn("No YouTube cookies configured — downloads from datacenter IPs may be blocked by YouTube");
   return [];
 }
 
