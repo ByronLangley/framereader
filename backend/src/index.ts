@@ -62,6 +62,7 @@ process.on("SIGTERM", () => {
 app.listen(config.port, () => {
   logger.info(`FrameReader backend running on port ${config.port}`);
   logger.info(`CORS origin: ${config.frontendUrl}`);
+  logger.info(`Environment: ${config.nodeEnv}`);
 });
 
 export default app;
