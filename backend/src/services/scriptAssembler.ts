@@ -26,27 +26,33 @@ function getClient(): Anthropic {
   return client;
 }
 
-const ASSEMBLY_SYSTEM_PROMPT = `You are a professional screenwriter converting video analysis data into a screenplay. The data includes audio transcription (dialogue) and visual frame descriptions (settings/action).
+const ASSEMBLY_SYSTEM_PROMPT = `You are a professional screenwriter converting video analysis data into a screenplay. The data includes audio transcription (dialogue with speaker labels) and visual frame descriptions (settings, characters present, and who appears to be speaking).
 
 CRITICAL PRIORITY: DIALOGUE IS PRIMARY. The spoken words are the main content. Visual descriptions are only brief scene-setting.
 
-RULES:
-1. Scene headings: ALL CAPS — "INT." or "EXT.", location, time of day
-   Example: INT. PAWN SHOP - DAY
-2. Character names: ALL CAPS above their dialogue
-   - Match speaker labels to visual character descriptions using timing
-   - Use real names if identifiable, otherwise brief descriptors ("YOUNG MAN", "EMPLOYEE")
-   - Keep names CONSISTENT throughout
-3. Dialogue: Write out EVERYTHING the person says. Every word matters. Do not summarize or skip dialogue.
-4. Action lines: BRIEF (1 sentence max). Only for scene changes or significant physical actions.
-   - Do NOT describe facial expressions, body language, or camera work
-   - Do NOT describe what characters look like beyond first introduction
-5. Parentheticals: Only when delivery is unusual (whispering, sarcastic, etc.)
-6. Timestamp markers as comments every ~30 seconds: // [00:01:30]
-7. Do NOT include any on-screen text, subtitles, captions, or graphics
-8. If background music is mentioned in any description, note it in the metadata header
+SPEAKER-CHARACTER MATCHING (do this FIRST, before writing):
+1. The audio transcription has generic speaker labels (Speaker A, Speaker B, etc.)
+2. The visual data shows which characters are present AND who appears to be speaking at various timestamps
+3. Match each speaker label to a visual character by checking: at the timestamps when Speaker A talks, who is visually shown speaking?
+4. Use contextual clues: dialogue content (e.g. "how much would you pay me" = the customer), gender of voice vs. visible characters
+5. ONCE YOU ASSIGN a speaker to a character, KEEP IT CONSISTENT for the entire screenplay — never switch
+6. If a speaker talks while off-camera, still attribute to the same character you already established
+7. Different locations may have different characters — don't assume the same person unless they clearly match
 
-The screenplay should read like a transcript with minimal stage directions — the dialogue carries the story.
+CHARACTER NAMING:
+- Give each unique person a consistent name: "YOUNG MAN", "SHOP OWNER", "JEWELER", etc.
+- Use descriptive but BRIEF names — avoid long descriptions as names
+- A character in Scene 1 and a different character in Scene 2 should have DIFFERENT names unless they're clearly the same person
+
+SCREENPLAY FORMAT:
+1. Scene headings: ALL CAPS — "INT." or "EXT.", location, time of day
+2. Character names: ALL CAPS above their dialogue
+3. Dialogue: Write out EVERYTHING the person says. Every word matters. Do not summarize or skip.
+4. Action lines: BRIEF (1 sentence max). Only for scene changes or significant physical actions.
+5. Parentheticals: Only when delivery is unusual
+6. Timestamp markers as comments every ~30 seconds: // [00:00:30]
+7. Do NOT include any on-screen text, subtitles, captions, or graphics
+8. If background music is mentioned, note it in the metadata header
 
 OUTPUT: Return the complete screenplay as plain text. Do NOT wrap in JSON or code blocks. Start with the metadata header, then the screenplay body.`;
 
@@ -62,18 +68,25 @@ export async function assembleScript(
   const timeline = buildTimeline(input);
 
   const dialogueCount = input.dialogueEntries.length;
+  const speakerCount = input.speakers.length;
+
   const prompt = `Merge the following video analysis data into a professional screenplay.
-${dialogueCount > 0 ? `\nIMPORTANT: There are ${dialogueCount} dialogue entries. The dialogue MUST be the primary content. Use action entries only for brief scene headings and location changes. Write out ALL dialogue completely — do not summarize or skip any spoken words.` : ""}
+${dialogueCount > 0 ? `\nIMPORTANT: There are ${dialogueCount} dialogue entries from ${speakerCount} distinct speaker(s). The dialogue MUST be the primary content. Write out ALL dialogue completely — do not summarize or skip any spoken words.` : ""}
+
 VIDEO METADATA:
 - Title: ${input.title}
 - Duration: ${formatDuration(input.duration)}
 - Source: ${input.sourceUrl}
 - Platform: ${input.platform}
-${input.transcriptionFailed ? "\nNOTE: Audio transcription failed. Script will be visual descriptions only. Use action descriptions to construct the screenplay." : ""}
+${input.transcriptionFailed ? "\nNOTE: Audio transcription failed. Script will be visual descriptions only." : ""}
 ${input.visualFailed ? "\nNOTE: Visual analysis failed. Script will be dialogue/transcript only." : ""}
 
-SPEAKERS DETECTED: ${input.speakers.length > 0 ? input.speakers.join(", ") : "None"}
-CHARACTERS SEEN: ${input.characters.length > 0 ? input.characters.join(", ") : "None"}
+AUDIO SPEAKERS DETECTED (from voice analysis): ${input.speakers.length > 0 ? input.speakers.join(", ") : "None"}
+CHARACTERS SEEN ON SCREEN: ${input.characters.length > 0 ? input.characters.join(", ") : "None"}
+
+STEP 1: Before writing, map each audio speaker to a visual character. Look at the "Appears to be speaking" cues in the timeline and cross-reference with dialogue timestamps. A speaker who talks at 5.2s should match the character shown speaking around 5s.
+
+STEP 2: Assign each mapped character a consistent SHORT name (e.g., YOUNG MAN, SHOP OWNER). Use that name for ALL of that speaker's dialogue throughout — even when they're off-camera.
 
 MERGED TIMELINE (chronological):
 ${timeline}
@@ -126,7 +139,9 @@ function buildTimeline(input: AssemblyInput): string {
 
   for (const a of input.actionEntries) {
     const parts = [`[ACTION @ ${formatTimestamp(a.timestamp)}]`, a.action];
-    if (a.characters.length > 0) parts.push(`Characters: ${a.characters.join(", ")}`);
+    if (a.characters.length > 0) parts.push(`Characters visible: ${a.characters.join(", ")}`);
+    // onScreenText field carries the "who appears to be speaking" visual cue
+    if (a.onScreenText) parts.push(`Appears to be speaking: ${a.onScreenText}`);
 
     entries.push({
       timestamp: a.timestamp,

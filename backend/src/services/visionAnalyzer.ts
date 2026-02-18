@@ -27,11 +27,11 @@ Write SHORT descriptions (1 sentence max per frame). Focus ONLY on:
 - Location/setting (INT/EXT, what kind of place)
 - Who is present (brief physical description for identification only)
 - Significant physical actions (handing something over, entering a room)
+- WHO APPEARS TO BE SPEAKING — look for open mouth, talking gestures, facing the camera while gesturing. This is critical for matching audio to characters.
 
 IGNORE completely:
 - On-screen text, subtitles, captions, titles, graphics, watermarks
 - Facial expressions and body language (the dialogue conveys emotion)
-- Generic observations (person standing, person looking at camera)
 - Camera movements, angles, or technical details
 - Props and background items unless critical to the action
 
@@ -52,12 +52,15 @@ ${previousContext ? `\nPrevious scene context: ${previousContext}` : ""}
 
 For each frame, provide a BRIEF (1 sentence) description of the setting and action. IGNORE any on-screen text, subtitles, or captions.
 
+IMPORTANT: Note which character appears to be ACTIVELY SPEAKING (mouth open, talking gesture, addressing others). Use null if nobody is clearly speaking or if it's ambiguous.
+
 Return JSON array:
 [
   {
     "timestamp": <seconds as number>,
     "action": "<1 sentence: location + what is physically happening>",
-    "characters": ["<brief identifying description, e.g. 'young man in black shirt'>"]
+    "characters": ["<brief identifying description, e.g. 'young man in black shirt'>"],
+    "speaking": "<description of character who appears to be talking, or null>"
   }
 ]`;
 }
@@ -130,6 +133,7 @@ export async function analyzeFrames(
           timestamp: number;
           action: string;
           characters?: string[];
+          speaking?: string | null;
         }>;
 
         for (const entry of parsed) {
@@ -137,7 +141,7 @@ export async function analyzeFrames(
             timestamp: entry.timestamp * 1000, // Convert to milliseconds
             action: entry.action,
             characters: entry.characters || [],
-            onScreenText: null,
+            onScreenText: entry.speaking || null, // Reuse onScreenText field to carry speaking info
             significantProps: null,
             cameraNotes: null,
             confidence: "high",
