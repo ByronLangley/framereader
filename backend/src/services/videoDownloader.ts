@@ -12,9 +12,10 @@ interface DownloadResult {
   duration: number; // seconds
 }
 
-// Common args for all yt-dlp calls (JS runtime + bypass)
+// Common args for all yt-dlp calls (JS runtime + challenge solver)
 const COMMON_ARGS = [
-  "--js-runtimes", "node",  // Use Node.js for YouTube signature solving (Deno not installed)
+  "--js-runtimes", "node",              // Use Node.js for YouTube signature solving (Deno not installed)
+  "--remote-components", "ejs:github",  // Download challenge solver scripts from GitHub
 ];
 
 // yt-dlp args that help bypass YouTube bot detection on datacenter IPs
