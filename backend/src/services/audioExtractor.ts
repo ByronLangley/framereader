@@ -8,6 +8,7 @@ import { ProcessingError } from "../utils/errors";
 interface AudioResult {
   audioPath: string;
   hasAudio: boolean;
+  extractionError?: string;
 }
 
 export async function extractAudio(
@@ -19,13 +20,15 @@ export async function extractAudio(
   logger.info(`Extracting audio for job ${jobId} from ${videoPath}`);
 
   // Check if video has an audio stream
-  const hasAudio = await checkForAudioStream(videoPath);
-  if (!hasAudio) {
-    logger.info(`No audio stream found in ${videoPath}`);
-    return { audioPath: "", hasAudio: false };
+  const probeResult = await checkForAudioStream(videoPath);
+  if (!probeResult.hasAudio) {
+    logger.warn(`No audio stream found in ${videoPath} (probe error: ${probeResult.error || "none"})`);
+    return { audioPath: "", hasAudio: false, extractionError: probeResult.error };
   }
 
-  return new Promise((resolve, reject) => {
+  logger.info(`Audio stream detected: ${probeResult.codecName}, ${probeResult.sampleRate}Hz`);
+
+  return new Promise((resolve) => {
     ffmpeg(videoPath)
       .noVideo()
       .audioCodec("pcm_s16le")
@@ -33,31 +36,52 @@ export async function extractAudio(
       .audioChannels(1)
       .output(audioPath)
       .on("start", (cmd) => {
-        logger.debug(`ffmpeg audio extraction command: ${cmd}`);
+        logger.info(`ffmpeg audio extraction command: ${cmd}`);
       })
       .on("end", () => {
-        logger.info(`Audio extracted: ${audioPath}`);
+        const stats = fs.statSync(audioPath);
+        logger.info(`Audio extracted: ${audioPath} (${(stats.size / 1024).toFixed(0)} KB)`);
+        if (stats.size < 1000) {
+          logger.warn(`Audio file suspiciously small (${stats.size} bytes), may be empty`);
+        }
         resolve({ audioPath, hasAudio: true });
       })
       .on("error", (err) => {
-        logger.error(`Audio extraction failed for job ${jobId}`, { error: err.message });
-        // Don't throw — audio failure is non-fatal
-        resolve({ audioPath: "", hasAudio: false });
+        logger.error(`Audio extraction FAILED for job ${jobId}: ${err.message}`);
+        // Still report hasAudio: true so pipeline knows audio EXISTS but extraction failed
+        // This allows the orchestrator to report the error properly
+        resolve({ audioPath: "", hasAudio: false, extractionError: err.message });
       })
       .run();
   });
 }
 
-function checkForAudioStream(videoPath: string): Promise<boolean> {
+interface ProbeResult {
+  hasAudio: boolean;
+  codecName?: string;
+  sampleRate?: number;
+  error?: string;
+}
+
+function checkForAudioStream(videoPath: string): Promise<ProbeResult> {
   return new Promise((resolve) => {
     ffmpeg.ffprobe(videoPath, (err, metadata) => {
       if (err) {
-        logger.warn(`ffprobe failed: ${err.message}`);
-        resolve(false);
+        logger.warn(`ffprobe failed for ${videoPath}: ${err.message}`);
+        resolve({ hasAudio: false, error: err.message });
         return;
       }
-      const hasAudio = metadata.streams.some((s) => s.codec_type === "audio");
-      resolve(hasAudio);
+      const audioStream = metadata.streams.find((s) => s.codec_type === "audio");
+      if (audioStream) {
+        resolve({
+          hasAudio: true,
+          codecName: audioStream.codec_name,
+          sampleRate: audioStream.sample_rate ? Number(audioStream.sample_rate) : undefined,
+        });
+      } else {
+        logger.warn(`No audio stream in metadata. Streams: ${metadata.streams.map((s) => s.codec_type).join(", ")}`);
+        resolve({ hasAudio: false });
+      }
     });
   });
 }

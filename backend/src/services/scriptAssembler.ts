@@ -26,23 +26,27 @@ function getClient(): Anthropic {
   return client;
 }
 
-const ASSEMBLY_SYSTEM_PROMPT = `You are a professional screenwriter and script supervisor. Your task is to convert raw video analysis data — a combination of audio transcription and visual frame descriptions — into a properly formatted screenplay.
+const ASSEMBLY_SYSTEM_PROMPT = `You are a professional screenwriter converting video analysis data into a screenplay. The data includes audio transcription (dialogue) and visual frame descriptions (settings/action).
+
+CRITICAL PRIORITY: DIALOGUE IS PRIMARY. The spoken words are the main content. Visual descriptions are only brief scene-setting.
 
 RULES:
-1. Scene headings: ALL CAPS, "INT." or "EXT.", location, time of day
-   Example: INT. OFFICE - DAY
-2. Character names: ALL CAPS, centered above their dialogue
-   - Match speaker labels (Speaker A, Speaker B) to visual character descriptions using timing
-   - Use recognized names when identifiable (e.g., "KEEGAN", "PEELE")
-   - Fall back to descriptive labels ("MAN IN HAT", "WOMAN AT DESK")
+1. Scene headings: ALL CAPS — "INT." or "EXT.", location, time of day
+   Example: INT. PAWN SHOP - DAY
+2. Character names: ALL CAPS above their dialogue
+   - Match speaker labels to visual character descriptions using timing
+   - Use real names if identifiable, otherwise brief descriptors ("YOUNG MAN", "EMPLOYEE")
    - Keep names CONSISTENT throughout
-3. Dialogue: indented, below character name
-4. Action lines: present tense, describe what we see, full width
-5. Parentheticals: (in parentheses) between character name and dialogue for delivery notes
-6. Include timestamp markers as comments every ~30 seconds: // [00:01:30]
-7. Mark uncertain elements with [check this]
-8. Note background music once at the metadata header if detected
-9. Sound effects noted inline when narratively meaningful
+3. Dialogue: Write out EVERYTHING the person says. Every word matters. Do not summarize or skip dialogue.
+4. Action lines: BRIEF (1 sentence max). Only for scene changes or significant physical actions.
+   - Do NOT describe facial expressions, body language, or camera work
+   - Do NOT describe what characters look like beyond first introduction
+5. Parentheticals: Only when delivery is unusual (whispering, sarcastic, etc.)
+6. Timestamp markers as comments every ~30 seconds: // [00:01:30]
+7. Do NOT include any on-screen text, subtitles, captions, or graphics
+8. If background music is mentioned in any description, note it in the metadata header
+
+The screenplay should read like a transcript with minimal stage directions — the dialogue carries the story.
 
 OUTPUT: Return the complete screenplay as plain text. Do NOT wrap in JSON or code blocks. Start with the metadata header, then the screenplay body.`;
 
@@ -57,14 +61,15 @@ export async function assembleScript(
   // Build the merged timeline
   const timeline = buildTimeline(input);
 
+  const dialogueCount = input.dialogueEntries.length;
   const prompt = `Merge the following video analysis data into a professional screenplay.
-
+${dialogueCount > 0 ? `\nIMPORTANT: There are ${dialogueCount} dialogue entries. The dialogue MUST be the primary content. Use action entries only for brief scene headings and location changes. Write out ALL dialogue completely — do not summarize or skip any spoken words.` : ""}
 VIDEO METADATA:
 - Title: ${input.title}
 - Duration: ${formatDuration(input.duration)}
 - Source: ${input.sourceUrl}
 - Platform: ${input.platform}
-${input.transcriptionFailed ? "\nNOTE: Audio transcription failed. Script will be visual descriptions only." : ""}
+${input.transcriptionFailed ? "\nNOTE: Audio transcription failed. Script will be visual descriptions only. Use action descriptions to construct the screenplay." : ""}
 ${input.visualFailed ? "\nNOTE: Visual analysis failed. Script will be dialogue/transcript only." : ""}
 
 SPEAKERS DETECTED: ${input.speakers.length > 0 ? input.speakers.join(", ") : "None"}
@@ -81,7 +86,7 @@ DURATION: ${formatDuration(input.duration)}
 PROCESSED: ${new Date().toISOString().split("T")[0]}
 BACKGROUND MUSIC: [Note if detected from descriptions, or "None detected"]
 
-Then write the screenplay.`;
+Then write the screenplay. Remember: dialogue is primary, action lines are brief scene-setting only.`;
 
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-20250514",
@@ -122,10 +127,6 @@ function buildTimeline(input: AssemblyInput): string {
   for (const a of input.actionEntries) {
     const parts = [`[ACTION @ ${formatTimestamp(a.timestamp)}]`, a.action];
     if (a.characters.length > 0) parts.push(`Characters: ${a.characters.join(", ")}`);
-    if (a.onScreenText) parts.push(`On-screen text: "${a.onScreenText}"`);
-    if (a.significantProps) parts.push(`Props: ${a.significantProps.join(", ")}`);
-    if (a.cameraNotes) parts.push(`Camera: ${a.cameraNotes}`);
-    if (a.confidence === "uncertain") parts.push("[uncertain]");
 
     entries.push({
       timestamp: a.timestamp,

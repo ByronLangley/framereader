@@ -21,20 +21,21 @@ function getClient(): Anthropic {
   return client;
 }
 
-const VISION_SYSTEM_PROMPT = `You are a professional script supervisor analyzing video frames to create a screenplay. For each frame, describe what you see in terms of narrative significance — what matters for telling the story, not technical camera details.
+const VISION_SYSTEM_PROMPT = `You are a script supervisor noting BRIEF location and character details from video frames. Your descriptions supplement spoken dialogue — they are NOT the main content.
 
-Focus on:
-- What characters are doing and their expressions/body language
-- Significant props, costumes, or visual elements that drive the narrative
-- Setting/location changes
-- On-screen text, titles, or graphics
-- Visual comedy elements (escalation, absurdity, contrast)
-- Camera movements only when narratively meaningful (dramatic zoom, reveal)
+Write SHORT descriptions (1 sentence max per frame). Focus ONLY on:
+- Location/setting (INT/EXT, what kind of place)
+- Who is present (brief physical description for identification only)
+- Significant physical actions (handing something over, entering a room)
 
-Do NOT describe:
-- Generic/obvious details (a person standing, a room with walls)
-- Irrelevant background elements
-- Frame-by-frame minutiae that doesn't advance understanding
+IGNORE completely:
+- On-screen text, subtitles, captions, titles, graphics, watermarks
+- Facial expressions and body language (the dialogue conveys emotion)
+- Generic observations (person standing, person looking at camera)
+- Camera movements, angles, or technical details
+- Props and background items unless critical to the action
+
+Keep it minimal. A screenplay's visuals are secondary to dialogue.
 
 Return ONLY valid JSON.`;
 
@@ -49,16 +50,14 @@ function buildBatchPrompt(
 Batch ${batchIndex + 1} — frames at timestamps: ${frames.map((f) => `${f.timestamp.toFixed(1)}s`).join(", ")}
 ${previousContext ? `\nPrevious scene context: ${previousContext}` : ""}
 
-Analyze each frame. Return JSON array:
+For each frame, provide a BRIEF (1 sentence) description of the setting and action. IGNORE any on-screen text, subtitles, or captions.
+
+Return JSON array:
 [
   {
     "timestamp": <seconds as number>,
-    "action": "<what is happening — narratively meaningful description>",
-    "characters": ["<character descriptions>"],
-    "onScreenText": "<visible text or null>",
-    "significantProps": ["<notable objects/costumes>"] or null,
-    "cameraNotes": "<only if narratively meaningful>" or null,
-    "confidence": "high" or "uncertain"
+    "action": "<1 sentence: location + what is physically happening>",
+    "characters": ["<brief identifying description, e.g. 'young man in black shirt'>"]
   }
 ]`;
 }
@@ -131,10 +130,6 @@ export async function analyzeFrames(
           timestamp: number;
           action: string;
           characters?: string[];
-          onScreenText?: string | null;
-          significantProps?: string[] | null;
-          cameraNotes?: string | null;
-          confidence?: string;
         }>;
 
         for (const entry of parsed) {
@@ -142,10 +137,10 @@ export async function analyzeFrames(
             timestamp: entry.timestamp * 1000, // Convert to milliseconds
             action: entry.action,
             characters: entry.characters || [],
-            onScreenText: entry.onScreenText || null,
-            significantProps: entry.significantProps || null,
-            cameraNotes: entry.cameraNotes || null,
-            confidence: entry.confidence === "uncertain" ? "uncertain" : "high",
+            onScreenText: null,
+            significantProps: null,
+            cameraNotes: null,
+            confidence: "high",
           };
           allEntries.push(actionEntry);
 

@@ -81,6 +81,9 @@ export async function processJob(jobId: string): Promise<void> {
       sampleFrames(jobId, videoPath, duration),
     ]);
 
+    logger.info(`Audio extraction result for job ${jobId}: hasAudio=${audioResult.hasAudio}, path="${audioResult.audioPath}", error="${audioResult.extractionError || "none"}"`);
+    logger.info(`Frame sampling result for job ${jobId}: ${frames.length} frames`);
+
     // Delete video file immediately (per PRD)
     try {
       fs.unlinkSync(videoPath);
@@ -103,16 +106,18 @@ export async function processJob(jobId: string): Promise<void> {
           .then((result) => {
             dialogueEntries = result.dialogueEntries;
             speakers = result.speakers;
+            logger.info(`Transcription complete for job ${jobId}: ${dialogueEntries.length} dialogue entries, ${speakers.length} speakers`);
             updateJobStage(jobId, "transcription", "complete");
             cleanupAudio(jobId);
           })
           .catch((err) => {
-            logger.error(`Transcription failed for job ${jobId}`, { error: err });
+            logger.error(`Transcription FAILED for job ${jobId}`, { error: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined });
             transcriptionFailed = true;
             updateJobStage(jobId, "transcription", "error");
             cleanupAudio(jobId);
           })
       : Promise.resolve().then(() => {
+          logger.warn(`Transcription SKIPPED for job ${jobId}: no audio available (extraction error: ${audioResult.extractionError || "no audio stream"})`);
           updateJobStage(jobId, "transcription", "skipped");
         });
 
@@ -137,9 +142,15 @@ export async function processJob(jobId: string): Promise<void> {
 
     await Promise.all([transcriptionPromise, visualPromise]);
 
+    logger.info(`Pipeline stage 3 results for job ${jobId}: dialogue=${dialogueEntries.length}, actions=${actionEntries.length}, transcriptionFailed=${transcriptionFailed}, visualFailed=${visualFailed}`);
+
     // Check if we have anything to work with
     if (transcriptionFailed && visualFailed) {
       throw new Error("Both transcription and visual analysis failed");
+    }
+
+    if (dialogueEntries.length === 0 && !transcriptionFailed) {
+      logger.warn(`No dialogue entries for job ${jobId} despite transcription not failing — audio may have been empty or inaudible`);
     }
 
     setJobTranscription(jobId, { dialogueEntries, speakers });
