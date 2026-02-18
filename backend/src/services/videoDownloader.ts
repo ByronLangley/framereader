@@ -12,8 +12,14 @@ interface DownloadResult {
   duration: number; // seconds
 }
 
+// Common args for all yt-dlp calls (JS runtime + bypass)
+const COMMON_ARGS = [
+  "--js-runtimes", "node",  // Use Node.js for YouTube signature solving (Deno not installed)
+];
+
 // yt-dlp args that help bypass YouTube bot detection on datacenter IPs
 const YT_BYPASS_ARGS = [
+  ...COMMON_ARGS,
   "--extractor-args", "youtube:player_client=web_creator",
   "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
   "--geo-bypass",
@@ -82,6 +88,7 @@ export async function downloadVideo(
         "--merge-output-format", "mp4",
         "-o", outputTemplate,
         "--no-playlist",
+        ...COMMON_ARGS,
         "--extractor-args", "youtube:player_client=mediaconnect",
         "--geo-bypass",
         ...cookieArgs,
@@ -95,6 +102,7 @@ export async function downloadVideo(
         "--merge-output-format", "mp4",
         "-o", outputTemplate,
         "--no-playlist",
+        ...COMMON_ARGS,
         "--geo-bypass",
         ...cookieArgs,
       ],
