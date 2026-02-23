@@ -29,6 +29,44 @@ export async function sampleFrames(
 
   let frames: FrameInfo[];
 
+  // If duration is unknown (0), try to get it via ffprobe directly
+  if (!duration || duration === 0) {
+    try {
+      duration = await new Promise<number>((resolve) => {
+        ffmpeg.ffprobe(videoPath, (err, metadata) => {
+          if (err) resolve(0);
+          else resolve(metadata.format.duration || 0);
+        });
+      });
+      logger.info(`frameSampler ffprobe got duration: ${duration}s`);
+    } catch {
+      logger.warn(`frameSampler ffprobe failed, duration stays at 0`);
+    }
+  }
+
+  // If duration is still 0, try extracting frames at fixed timestamps as last resort
+  if (!duration || duration === 0) {
+    logger.warn(`Duration still unknown for job ${jobId}, extracting probe frames at fixed offsets`);
+    const probeFrames: FrameInfo[] = [];
+    const probeTimestamps = [0, 2, 5, 10, 20, 30, 60, 90, 120];
+    for (let i = 0; i < probeTimestamps.length; i++) {
+      const ts = probeTimestamps[i];
+      const framePath = path.join(framesDir, `frame_probe_${String(i).padStart(4, "0")}.jpg`);
+      try {
+        await extractFrameAt(videoPath, ts, framePath);
+        probeFrames.push({ framePath, timestamp: ts });
+      } catch {
+        // Frame at this timestamp doesn't exist — we've gone past the end
+        break;
+      }
+    }
+    if (probeFrames.length > 0) {
+      logger.info(`Extracted ${probeFrames.length} probe frames for job ${jobId}`);
+      return probeFrames;
+    }
+    return [];
+  }
+
   if (duration <= 30) {
     // Short videos: sample every 2 seconds
     frames = await sampleAtIntervals(jobId, videoPath, framesDir, 2, duration);

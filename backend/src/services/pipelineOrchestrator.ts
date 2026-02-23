@@ -67,6 +67,27 @@ export async function processJob(jobId: string): Promise<void> {
       throw new Error("No video path available");
     }
 
+    // If duration is 0 or missing, probe the actual video file for real duration
+    if (!duration || duration === 0) {
+      try {
+        const ffmpegModule = await import("fluent-ffmpeg");
+        duration = await new Promise<number>((resolve) => {
+          ffmpegModule.default.ffprobe(videoPath!, (err, metadata) => {
+            if (err) {
+              logger.warn(`ffprobe fallback failed for job ${jobId}`, { error: err });
+              resolve(0);
+            } else {
+              const d = metadata.format.duration || 0;
+              logger.info(`ffprobe fallback got duration for job ${jobId}: ${d}s`);
+              resolve(d);
+            }
+          });
+        });
+      } catch (err) {
+        logger.warn(`ffprobe import failed for job ${jobId}`, { error: err });
+      }
+    }
+
     setJobMetadata(jobId, {
       title,
       duration,

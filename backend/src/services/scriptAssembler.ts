@@ -28,31 +28,75 @@ function getClient(): Anthropic {
 
 const ASSEMBLY_SYSTEM_PROMPT = `You are a professional screenwriter converting video analysis data into a screenplay. The data includes audio transcription (dialogue with speaker labels) and visual frame descriptions (settings, characters present, and who appears to be speaking).
 
-CRITICAL PRIORITY: DIALOGUE IS PRIMARY. The spoken words are the main content. Visual descriptions are only brief scene-setting.
+CRITICAL RULE — DIALOGUE MUST BE INTERLEAVED WITH ACTIONS SCENE BY SCENE:
+The dialogue and visual actions are both timestamped. You MUST distribute dialogue throughout the screenplay so that it appears at the correct point in the timeline, interleaved with the action descriptions. Do NOT group all dialogue together at the top of a scene. Each action beat should be accompanied by the dialogue that occurs at that timestamp.
+
+HOW TO INTERLEAVE:
+1. Walk through the merged timeline in chronological order.
+2. For each timestamp range (between two action/frame markers), place the dialogue lines that were spoken during that time window DIRECTLY BEFORE or AFTER the corresponding action line.
+3. If a sentence of dialogue spans across two frame timestamps, keep the COMPLETE sentence together — place it at the timestamp where it begins. Never split a sentence in half.
+4. The result should read like a real screenplay where you see an action, then the dialogue spoken during that moment, then the next action, then the next dialogue, and so on.
 
 SPEAKER-CHARACTER MATCHING (do this FIRST, before writing):
 1. The audio transcription has generic speaker labels (Speaker A, Speaker B, etc.)
 2. The visual data shows which characters are present AND who appears to be speaking at various timestamps
 3. Match each speaker label to a visual character by checking: at the timestamps when Speaker A talks, who is visually shown speaking?
-4. Use contextual clues: dialogue content (e.g. "how much would you pay me" = the customer), gender of voice vs. visible characters
+4. Use contextual clues: dialogue content, gender of voice vs. visible characters
 5. ONCE YOU ASSIGN a speaker to a character, KEEP IT CONSISTENT for the entire screenplay — never switch
 6. If a speaker talks while off-camera, still attribute to the same character you already established
 7. Different locations may have different characters — don't assume the same person unless they clearly match
 
 CHARACTER NAMING:
-- Give each unique person a consistent name: "YOUNG MAN", "SHOP OWNER", "JEWELER", etc.
+- Name characters by their role or appearance: "MAN 1", "WOMAN 1", "WOMAN 2", "INSTRUCTOR", "CUSTOMER", etc.
 - Use descriptive but BRIEF names — avoid long descriptions as names
+- If you can identify a clear role (e.g. teacher, barista, interviewer), use that instead of a number
 - A character in Scene 1 and a different character in Scene 2 should have DIFFERENT names unless they're clearly the same person
 
 SCREENPLAY FORMAT:
 1. Scene headings: ALL CAPS — "INT." or "EXT.", location, time of day
 2. Character names: ALL CAPS above their dialogue
-3. Dialogue: Write out EVERYTHING the person says. Every word matters. Do not summarize or skip.
-4. Action lines: BRIEF (1 sentence max). Only for scene changes or significant physical actions.
+3. Dialogue: Write out EVERYTHING the person says. Every word matters. Do not summarize or skip. Break dialogue into individual sentences or short groups that match the timeline — do NOT dump all dialogue in one block.
+4. Action lines: BRIEF (1 sentence max). Place them at the correct timestamp position in the screenplay.
 5. Parentheticals: Only when delivery is unusual
-6. Timestamp markers as comments every ~30 seconds: // [00:00:30]
+6. Timestamp markers as comments before each action beat: // [00:00:02], // [00:00:04], etc. — use the actual timestamps from the timeline data
 7. Do NOT include any on-screen text, subtitles, captions, or graphics
 8. If background music is mentioned, note it in the metadata header
+
+EXAMPLE of correct interleaving:
+
+INT. OFFICE - DAY
+
+Three people stand around a desk.
+
+// [00:00:02]
+
+Close-up of two hands engaged in a handshake.
+
+MAN 1
+A proper handshake lasts exactly three pumps.
+
+// [00:00:04]
+
+Chalk drawing on dark surface showing handshake instruction diagram.
+
+MAN 1
+Two pumps suggest you're hiding something.
+
+// [00:00:06]
+
+Close-up of the handshake between the two men.
+
+MAN 1
+Four pumps means you're European. Count silently.
+
+// [00:00:08]
+
+Back to the office scene. The two men face each other.
+
+MAN 1
+Honest, trustworthy American.
+
+FADE OUT.
 
 OUTPUT: Return the complete screenplay as plain text. Do NOT wrap in JSON or code blocks. Start with the metadata header, then the screenplay body.`;
 
@@ -99,7 +143,7 @@ DURATION: ${formatDuration(input.duration)}
 PROCESSED: ${new Date().toISOString().split("T")[0]}
 BACKGROUND MUSIC: [Note if detected from descriptions, or "None detected"]
 
-Then write the screenplay. Remember: dialogue is primary, action lines are brief scene-setting only.`;
+Then write the screenplay. REMEMBER: Distribute dialogue throughout the script so it appears at the correct timestamps alongside the matching action beats. Do NOT group all dialogue together — interleave it scene by scene, sentence by sentence. Keep complete sentences together; never split a sentence across two timestamps.`;
 
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-20250514",
@@ -133,7 +177,7 @@ function buildTimeline(input: AssemblyInput): string {
     entries.push({
       timestamp: d.startTime,
       type: "dialogue",
-      content: `[DIALOGUE] ${d.speaker}: "${d.text}"`,
+      content: `[DIALOGUE @ ${formatTimestamp(d.startTime)}-${formatTimestamp(d.endTime)}] ${d.speaker}: "${d.text}"`,
     });
   }
 
